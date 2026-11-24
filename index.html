@@ -1,0 +1,1221 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>html{color-scheme:light}body{margin:0}img{max-width:100%}</style>
+<title>Crate DJ</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: toolbar of filters on top, crate table left, sticky deck/player panel right. */
+:root {
+  --bg: #eceef2;
+  --surface: #f8f9fb;
+  --ink: #15181f;
+  --muted: #5b6270;
+  --line: #d5d9e1;
+  --accent: #3340e0;
+  --accent-ink: #ffffff;
+  --want: #9a4a06;
+  --have: #17703a;
+  --danger: #b4231f;
+  --f-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1218; --surface: #171b24; --ink: #e8eaf0; --muted: #9199aa; --line: #2a303d;
+    --accent: #8c98ff; --accent-ink: #0f1218; --want: #f5b04a; --have: #5fd38d; --danger: #ff8a84;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1218; --surface: #171b24; --ink: #e8eaf0; --muted: #9199aa; --line: #2a303d;
+  --accent: #8c98ff; --accent-ink: #0f1218; --want: #f5b04a; --have: #5fd38d; --danger: #ff8a84;
+  color-scheme: dark;
+}
+:root { --yes: #1a9b4b; --maybe: #d69a00; --no: #d6322d; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --yes: #4fd484; --maybe: #f7c948; --no: #ff6b66; } }
+:root[data-theme="dark"] { --yes: #4fd484; --maybe: #f7c948; --no: #ff6b66; }
+[hidden] { display: none !important; }
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 14px/1.45 var(--f-body);
+  padding-block: 20px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1640px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+header .titlebox { margin-right: 14px; }
+.titlebox { display: flex; flex-direction: column; gap: 4px; }
+h1 { font: 700 34px/1 var(--f-display); letter-spacing: .02em; text-transform: uppercase; margin: 0; }
+.counts { color: var(--muted); font-family: var(--f-mono); font-size: 13px; }
+.counts b { color: var(--ink); font-size: 17px; font-weight: 600; }
+th.n, td.n { width: 34px; text-align: center; padding: 6px 2px 6px 4px; color: var(--muted); font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.spacer { flex: 1; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 4px;
+  padding: 6px 11px; cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+button.ghost { background: transparent; }
+button.danger { color: var(--danger); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input, select, textarea {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 4px;
+  padding: 6px 8px; min-width: 0; width: 100%;
+}
+label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.filters {
+  display: grid; gap: 10px; align-items: end;
+  grid-template-columns: minmax(180px, 2fr) repeat(5, minmax(90px, 1fr)) minmax(110px, 1fr) minmax(110px, 1fr) auto;
+  padding: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+}
+.range { display: flex; gap: 6px; }
+.range input { padding-inline: 6px; }
+.filters-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
+.tablebox { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; overflow: auto; max-height: calc(100vh - 230px); min-height: 260px; }
+table { border-collapse: collapse; width: 100%; min-width: 780px; table-layout: fixed; }
+th, td { padding: 6px 8px; text-align: left; vertical-align: middle; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th {
+  position: sticky; top: 0; background: var(--surface); z-index: 1;
+  font: 600 11px var(--f-body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+  cursor: pointer; user-select: none;
+}
+th[aria-sort] { color: var(--ink); }
+th .arrow { color: var(--accent); }
+td.t, td.tx { white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
+td.t { font-weight: 500; }
+td.mono, th.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+tbody tr.sel { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.pill { font: 500 11px var(--f-mono); padding: 2px 7px; border-radius: 99px; border: 1px solid currentColor; }
+.pill.want { color: var(--want); }
+.pill.have { color: var(--have); }
+.star { background: none; border: 0; padding: 0 6px; font-size: 19px; line-height: 1; cursor: pointer; }
+.star:hover { transform: scale(1.15); }
+.star.yes, .star-i.yes { color: var(--yes); }
+.star.maybe, .star-i.maybe { color: var(--maybe); }
+.star.no, .star-i.no { color: var(--no); }
+tbody tr.no td:not(.int) { opacity: .5; }
+.seg button.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.seg button { padding-inline: 6px; font-size: 12.5px; }
+.cov { width: 64px; height: 64px; border-radius: 4px; object-fit: cover; display: block; }
+.cov.ph { background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--muted); display: grid; place-items: center; font-size: 26px; }
+.cov.big { width: 104px; height: 104px; flex: none; }
+.cov.big.ph { font-size: 40px; }
+th.cv, td.cv { width: 72px; padding: 6px 4px 6px 8px; }
+th.c, td.int, td.st { text-align: center; }
+.head { display: flex; gap: 12px; align-items: flex-start; }
+.head > div { min-width: 0; }
+.pltabs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pltabs input { width: 190px; }
+.pltab { border-radius: 99px; padding: 5px 12px; }
+.pltab .n { font-family: var(--f-mono); font-size: 11px; color: var(--muted); margin-left: 6px; }
+.pltab.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); font-weight: 600; }
+.pltab.add { border-style: dashed; color: var(--muted); }
+.pltools { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.plseg > .note { margin-bottom: 4px; }
+.bulk select, .bulk input { width: auto; max-width: 200px; }
+.datafoot { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; color: var(--muted); font-size: 12.5px; padding-top: 4px; }
+.datafoot b { color: var(--ink); font-weight: 600; }
+.bulk { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.bulk button:disabled { opacity: .45; cursor: default; }
+th.chk, td.chk { width: 34px; padding-right: 0; }
+.tablebox:not(.delmode) .chk { display: none; }
+input[type="checkbox"] { width: auto; padding: 0; accent-color: var(--accent); cursor: pointer; }
+.ex { font: 500 10px var(--f-mono); color: var(--muted); border: 1px dashed var(--muted); border-radius: 3px; padding: 0 4px; margin-left: 6px; }
+.empty { padding: 36px 20px; text-align: center; color: var(--muted); display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.empty strong { color: var(--ink); font: 700 22px var(--f-display); text-transform: uppercase; letter-spacing: .03em; }
+.deck { position: sticky; top: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.deck h2 { font: 700 26px/1.05 var(--f-display); margin: 0; text-transform: uppercase; letter-spacing: .01em; }
+.deck .artist { color: var(--muted); margin-top: 2px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.deck { min-width: 0; }
+.deck, .deck * { overflow-wrap: anywhere; }
+.deck .note { white-space: pre-line; }
+.note a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.chip { max-width: 100%; }
+.embed { display: block; width: 100%; border: 0; border-radius: 6px; background: var(--bg); }
+.embed.yt { aspect-ratio: 16 / 9; }
+.player { display: flex; flex-direction: column; gap: 6px; }
+.ytthumb { display: flex; align-items: center; justify-content: center; background-size: cover; background-position: center; text-decoration: none; color: #fff; }
+.ytthumb span { background: rgba(0, 0, 0, .72); padding: 8px 14px; border-radius: 4px; font-weight: 600; }
+.chip { font: 500 12px var(--f-mono); border: 1px solid var(--line); border-radius: 3px; padding: 3px 7px; }
+.chip.big { font-size: 20px; padding: 6px 10px; color: var(--accent); border-color: var(--accent); }
+.deck audio { width: 100%; }
+.drop { border: 1px dashed var(--line); border-radius: 4px; padding: 12px; color: var(--muted); font-size: 12.5px; display: flex; flex-direction: column; gap: 8px; }
+.drop.over { border-color: var(--accent); color: var(--ink); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.row > * { flex: 1 1 auto; }
+a.btn { text-decoration: none; text-align: center; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 6px 11px; color: var(--ink); }
+a.btn:hover { border-color: var(--accent); }
+a.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.note { font-size: 12px; color: var(--muted); }
+form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+form .full { grid-column: 1 / -1; }
+form textarea { resize: vertical; min-height: 56px; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 4px; font-size: 13px; z-index: 20; max-width: calc(100% - 32px); }
+@media (max-width: 1100px) {
+  .filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .filters .q, .filters-actions { grid-column: 1 / -1; }
+}
+@media (max-width: 860px) {
+  .main { grid-template-columns: minmax(0, 1fr); }
+  .deck { position: static; order: -1; }
+  .tablebox { max-height: 60vh; }
+}
+@media (max-width: 520px) {
+  .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  form { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="titlebox"><h1>Crate</h1>
+    <span class="counts" id="counts"></span></div>
+    <span class="spacer"></span>
+    <button id="btn-add" class="primary">+ Nuovo brano</button>
+    <button id="btn-files" type="button" title="Crea un brano per ogni file audio scelto">File audio</button>
+    <input id="in-audio" type="file" accept="audio/*" multiple hidden>
+    <button id="btn-import" type="button" title="Importa brani da un file CSV o Excel">Importa</button>
+    <input id="in-csv" type="file" accept=".csv,.xlsx,.xls,text/csv,text/plain" hidden>
+    <button id="btn-export" type="button">Esporta CSV</button>
+    <button id="btn-xlsx" type="button">Esporta Excel</button>
+    <button id="btn-delmode" type="button">Seleziona…</button>
+  </header>
+
+  <section class="filters" aria-label="Filtri">
+    <label class="q">Cerca
+      <input id="f-q" type="search" placeholder="Titolo, artista, etichetta, note">
+    </label>
+    <label>Genere <select id="f-genre"></select></label>
+    <label>Tonalità <select id="f-key"></select></label>
+    <label>Stato
+      <select id="f-status">
+        <option value="">Tutti</option>
+        <option value="want">Da comprare</option>
+        <option value="have">Comprati</option>
+      </select>
+    </label>
+    <label>Interesse
+      <select id="f-interest">
+        <option value="">Tutti</option>
+        <option value="yes">★ Interessante</option>
+        <option value="maybe">★ Da valutare</option>
+        <option value="no">★ Non mi interessa</option>
+        <option value="hide">Nascondi i non interessanti</option>
+      </select>
+    </label>
+    <label>Anno
+      <span class="range"><input id="f-y1" type="number" inputmode="numeric" placeholder="da"><input id="f-y2" type="number" inputmode="numeric" placeholder="a"></span>
+    </label>
+    <label>BPM
+      <span class="range"><input id="f-b1" type="number" inputmode="numeric" placeholder="min"><input id="f-b2" type="number" inputmode="numeric" placeholder="max"></span>
+    </label>
+    <label>Mixabili
+      <button id="f-mix" type="button" aria-pressed="false" title="Mostra i brani con tonalità compatibile (ruota di Camelot) e BPM entro ±6% dal brano selezionato">Con il selezionato</button>
+    </label>
+    <div class="filters-actions"><button id="f-reset" type="button" class="ghost">Azzera</button></div>
+  </section>
+
+  <div class="pltabs" id="pltabs" hidden></div>
+  <div class="bulk" id="bulk" hidden></div>
+
+  <div class="main">
+    <div class="tablebox" id="tablebox">
+      <table>
+        <thead><tr id="thead"></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div id="empty" class="empty" hidden></div>
+    </div>
+    <aside class="deck" id="deck" aria-live="polite"></aside>
+  </div>
+  <div class="datafoot">
+    <span><b>Copia di sicurezza</b> di brani, copertine, playlist e stelle:</span>
+    <button id="btn-backup" type="button">Salva backup</button>
+    <button id="btn-restore" type="button">Ripristina da backup</button>
+    <button id="btn-covers" type="button" title="Cerca online le copertine dei brani che non ne hanno">Cerca copertine mancanti</button>
+    <input id="in-backup" type="file" accept=".json,application/json" hidden>
+    <span id="bk-last"></span>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+<datalist id="keys"></datalist>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+window.claude = { use: async function (name) {
+  if (name !== "downloads") return null;
+  return { save: function (o) {
+    var blob = o.data instanceof Blob ? o.data : new Blob([o.data], { type: /\.csv$/i.test(o.filename) ? "text/csv;charset=utf-8" : "application/octet-stream" });
+    var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = o.filename;
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    return Promise.resolve({ status: "saved" });
+  } };
+} };
+</script>
+
+<script>
+(function () {
+  "use strict";
+  var COLS = [
+    { k: "title", l: "Brano", cls: "t" },
+    { k: "artist", l: "Artista", cls: "tx", w: 124 },
+    { k: "year", l: "Anno", cls: "mono", w: 50 },
+    { k: "genre", l: "Genere", cls: "tx", w: 100 },
+    { k: "bpm", l: "BPM", cls: "mono", w: 50 },
+    { k: "key", l: "Key", cls: "mono", w: 50 },
+    { k: "interest", l: "Interesse", cls: "c", w: 76 },
+    { k: "status", l: "Stato", cls: "c", w: 112 }
+  ];
+  var CAMELOT = [];
+  for (var n = 1; n <= 12; n++) { CAMELOT.push(n + "A"); CAMELOT.push(n + "B"); }
+  var STATUS = { want: "Da comprare", have: "Comprato" };
+  var LS_KEY = "crate-dj-v1";
+  var INTEREST = { yes: { l: "Interessante" }, maybe: { l: "Da valutare" }, no: { l: "Non mi interessa" } };
+  var INT_RANK = { yes: 0, maybe: 1, no: 2 };
+  var INT_NEXT = { maybe: "yes", yes: "no", no: "maybe" };
+  function interestOf(t) { return INTEREST[t.interest] ? t.interest : "maybe"; }
+  function parseInterest(v) { v = String(v).toLowerCase(); if (/non|^no$|scart|rosso|red/.test(v)) return "no"; if (/^(yes|s[iì])$|inter|verde|green/.test(v)) return "yes"; return "maybe"; }
+  function sortVal(t) { return sortKey === "interest" ? INT_RANK[interestOf(t)] : t[sortKey]; }
+
+  var tracks = [];
+  var selectedId = null;
+  var mode = "view";          // view | edit
+  var editId = null;          // null = nuovo
+  var sortKey = "createdAt", sortDir = "desc";
+  var mixOnly = false;
+  var localAudio = {};        // id -> {url, name}  (solo finché la pagina è aperta)
+  var dbCol = null;
+  var checked = new Set();     // id dei brani spuntati per l'eliminazione multipla
+  var bulkArm = false, bulkTimer = null;
+  var delMode = false;
+  var playlists = [], activePl = null, plNaming = false, plRenaming = null, plDelArm = false, plCol = null;
+  var LS_PL = "crate-dj-playlists-v1", plTimer = null, LS_BK = "crate-dj-lastbackup";         // modalità eliminazione: mostra caselle e barra
+  var lastDeckSig = "";
+  var $ = function (id) { return document.getElementById(id); };
+
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function uid() { return "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function toast(msg) {
+    var t = $("toast"); t.textContent = msg; t.hidden = false;
+    clearTimeout(toast._t); toast._t = setTimeout(function () { t.hidden = true; }, 2800);
+  }
+  function linkify(text) {
+    var re = /(https?:\/\/[^\s<>"]+|www\.[^\s<>"]+)/gi, out = "", last = 0, m;
+    text = String(text == null ? "" : text);
+    while ((m = re.exec(text))) {
+      var raw = m[0], trail = "", tm = /[.,;:!?)\]]+$/.exec(raw);
+      if (tm) { trail = tm[0]; raw = raw.slice(0, -trail.length); }
+      var href = safeUrl(/^www\./i.test(raw) ? "https://" + raw : raw);
+      out += esc(text.slice(last, m.index));
+      out += href ? '<a href="' + esc(href) + '" target="_blank" rel="noopener noreferrer">' + esc(raw) + "</a>" + esc(trail) : esc(m[0]);
+      last = m.index + m[0].length;
+    }
+    return out + esc(text.slice(last));
+  }
+  function safeUrl(u) { try { var x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : ""; } catch (e) { return ""; } }
+
+  /* ---------- storage: db se disponibile, altrimenti localStorage ---------- */
+  function lsLoad() { try { return JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch (e) { return []; } }
+  function lsSave() { try { localStorage.setItem(LS_KEY, JSON.stringify(tracks)); } catch (e) { toast("Spazio del browser pieno: esporta i dati e togli qualche copertina"); } }
+  function saveTrack(t) {
+    var i = tracks.findIndex(function (x) { return x.id === t.id; });
+    if (dbCol) {
+      var body = Object.assign({}, t); delete body.id;
+      return dbCol.doc(t.id).set(body).catch(function () { toast("Salvataggio non riuscito"); });
+    }
+    if (i >= 0) tracks[i] = t; else tracks.push(t);
+    lsSave(); renderAll(); return Promise.resolve();
+  }
+  function deleteTrack(id) {
+    if (dbCol) return dbCol.doc(id).delete().catch(function () { toast("Eliminazione non riuscita"); });
+    tracks = tracks.filter(function (x) { return x.id !== id; }); lsSave(); renderAll(); return Promise.resolve();
+  }
+  function onData(list) {
+    tracks = list;
+    checked.forEach(function (id) { if (!tracks.some(function (t) { return t.id === id; })) checked.delete(id); });
+    if (selectedId && !tracks.some(function (t) { return t.id === selectedId; })) { selectedId = null; mode = "view"; }
+    renderAll();
+  }
+  async function initStore() {
+    try {
+      var db = window.claude && window.claude.use ? await window.claude.use("db") : null;
+      if (db) {
+        dbCol = db.collection("tracks");
+        plCol = db.collection("playlists");
+        plCol.onSnapshot(function (snap) {
+          onPlData(snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }));
+        }, function () { plCol = null; onPlData(lsPlLoad()); });
+        dbCol.onSnapshot(function (snap) {
+          onData(snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }));
+        }, function () { dbCol = null; onData(lsLoad()); });
+        return;
+      }
+    } catch (e) {}
+    onData(lsLoad()); onPlData(lsPlLoad());
+  }
+
+  /* ---------- tonalità / filtri ---------- */
+  function parseKey(k) { var m = /^(\d{1,2})\s*([AB])$/i.exec(String(k || "").trim()); return m ? { n: +m[1], l: m[2].toUpperCase() } : null; }
+  function keysCompatible(a, b) {
+    var x = parseKey(a), y = parseKey(b); if (!x || !y) return false;
+    if (x.n === y.n) return true;
+    if (x.l !== y.l) return false;
+    var d = Math.abs(x.n - y.n); return d === 1 || d === 11;
+  }
+  function filtered() {
+    var iv = $("f-interest").value;
+    var plObj = activePl ? plOf(activePl) : null;
+    var q = $("f-q").value.trim().toLowerCase();
+    var g = $("f-genre").value, k = $("f-key").value, s = $("f-status").value;
+    var y1 = parseInt($("f-y1").value, 10), y2 = parseInt($("f-y2").value, 10);
+    var b1 = parseFloat($("f-b1").value), b2 = parseFloat($("f-b2").value);
+    var ref = mixOnly ? tracks.find(function (t) { return t.id === selectedId; }) : null;
+    var out = tracks.filter(function (t) {
+      if (q && [t.title, t.artist, t.label, t.notes, t.genre].join(" ").toLowerCase().indexOf(q) < 0) return false;
+      if (g && t.genre !== g) return false;
+      if (k && String(t.key || "").toUpperCase() !== k) return false;
+      if (s && t.status !== s) return false;
+      if (plObj && plObj.ids.indexOf(t.id) < 0) return false;
+      var ti = interestOf(t);
+      if (iv === "hide") { if (ti === "no") return false; } else if (iv && ti !== iv) return false;
+      if (!isNaN(y1) && !(t.year >= y1)) return false;
+      if (!isNaN(y2) && !(t.year <= y2)) return false;
+      if (!isNaN(b1) && !(t.bpm >= b1)) return false;
+      if (!isNaN(b2) && !(t.bpm <= b2)) return false;
+      if (ref) {
+        if (t.id === ref.id) return true;
+        if (!keysCompatible(ref.key, t.key)) return false;
+        if (ref.bpm && t.bpm && Math.abs(t.bpm - ref.bpm) / ref.bpm > 0.06) return false;
+      }
+      return true;
+    });
+    if (plObj && sortKey === "createdAt") return out.sort(function (a, b) { return plObj.ids.indexOf(a.id) - plObj.ids.indexOf(b.id); });
+    var dir = sortDir === "asc" ? 1 : -1;
+    out.sort(function (a, b) {
+      var x = sortVal(a), y = sortVal(b);
+      var ex = x == null || x === "", ey = y == null || y === "";
+      if (ex && ey) return 0; if (ex) return 1; if (ey) return -1;
+      if (sortKey === "key") { var kx = parseKey(x), ky = parseKey(y); if (kx && ky) return ((kx.n * 2 + (kx.l === "B" ? 1 : 0)) - (ky.n * 2 + (ky.l === "B" ? 1 : 0))) * dir; }
+      if (typeof x === "number" && typeof y === "number") return (x - y) * dir;
+      return String(x).localeCompare(String(y), "it", { sensitivity: "base" }) * dir;
+    });
+    return out;
+  }
+
+  /* ---------- render ---------- */
+  function renderFilterOptions() {
+    var gSel = $("f-genre"), kSel = $("f-key");
+    var gv = gSel.value, kv = kSel.value;
+    var genres = Array.from(new Set(tracks.map(function (t) { return t.genre; }).filter(Boolean))).sort(function (a, b) { return a.localeCompare(b, "it"); });
+    gSel.innerHTML = '<option value="">Tutti</option>' + genres.map(function (x) { return '<option>' + esc(x) + '</option>'; }).join("");
+    var keys = Array.from(new Set(tracks.map(function (t) { return String(t.key || "").toUpperCase(); }).filter(Boolean)));
+    keys.sort(function (a, b) { var x = parseKey(a), y = parseKey(b); return x && y ? (x.n * 2 + (x.l === "B" ? 1 : 0)) - (y.n * 2 + (y.l === "B" ? 1 : 0)) : a.localeCompare(b); });
+    kSel.innerHTML = '<option value="">Tutte</option>' + keys.map(function (x) { return '<option>' + esc(x) + '</option>'; }).join("");
+    gSel.value = genres.indexOf(gv) >= 0 ? gv : ""; kSel.value = keys.indexOf(kv) >= 0 ? kv : "";
+  }
+  function renderHead() {
+    $("thead").innerHTML = '<th class="n">N.</th><th class="cv"></th><th class="chk"><input type="checkbox" id="chk-all" aria-label="Seleziona tutti i brani visibili"></th>' + COLS.map(function (c) {
+      var on = sortKey === c.k;
+      return '<th class="' + (c.cls || "") + '" data-k="' + c.k + '"' + (c.w ? ' style="width:' + c.w + 'px"' : "") + (on ? ' aria-sort="' + (sortDir === "asc" ? "ascending" : "descending") + '"' : "") + '>' + esc(c.l) + (on ? ' <span class="arrow">' + (sortDir === "asc" ? "▲" : "▼") + "</span>" : "") + "</th>";
+    }).join("");
+  }
+  function renderTable() {
+    var list = filtered();
+    $("tbody").innerHTML = list.map(function (t, i) {
+      return '<tr data-id="' + esc(t.id) + '" class="' + (t.id === selectedId ? "sel " : "") + (interestOf(t) === "no" ? "no" : "") + '">' +
+        '<td class="n">' + (i + 1) + "</td>" +
+        '<td class="cv">' + coverHtml(t) + "</td>" +
+        '<td class="chk"><input type="checkbox" data-chk="1" aria-label="Seleziona per eliminare" ' + (checked.has(t.id) ? "checked" : "") + "></td>" +
+        '<td class="t">' + esc(t.title || "(senza titolo)") + (t.example ? '<span class="ex">esempio</span>' : "") + "</td>" +
+        '<td class="tx">' + esc(t.artist) + "</td>" +
+        '<td class="mono">' + esc(t.year || "") + "</td>" +
+        '<td class="tx">' + esc(t.genre) + "</td>" +
+        '<td class="mono">' + esc(t.bpm || "") + "</td>" +
+        '<td class="mono">' + esc(t.key) + "</td>" +
+        '<td class="int"><button class="star ' + interestOf(t) + '" data-star="1" title="' + INTEREST[interestOf(t)].l + ' (clic per cambiare)" aria-label="Interesse: ' + INTEREST[interestOf(t)].l + '">★</button></td>' +
+        '<td class="st"><span class="pill ' + (t.status === "have" ? "have" : "want") + '">' + (STATUS[t.status] || STATUS.want) + "</span></td></tr>";
+    }).join("");
+    var empty = $("empty");
+    if (!tracks.length) {
+      empty.hidden = false;
+      empty.innerHTML = "<strong>La cassa è vuota</strong><span>Aggiungi un brano, importa un CSV oppure carica degli esempi per provare filtri e player.</span>" +
+        '<span class="row" style="justify-content:center"><button class="primary" data-act="new">+ Nuovo brano</button><button data-act="samples">Carica 12 esempi</button></span>';
+    } else if (!list.length) {
+      empty.hidden = false;
+      var curPl = activePl && plOf(activePl);
+      if (curPl && !plCount(curPl)) empty.innerHTML = "<strong>Playlist vuota</strong><span>Premi \u00abSeleziona\u2026\u00bb in alto, spunta i brani e scegli \u00abAggiungi alla playlist\u00bb. Oppure apri un brano e premi il nome della playlist.</span>";
+      else empty.innerHTML = "<strong>Nessun risultato</strong><span>Nessun brano corrisponde ai filtri.</span><button data-act=\"reset\">Azzera filtri</button>";
+    } else empty.hidden = true;
+    renderBulk(list);
+    var want = tracks.filter(function (t) { return t.status !== "have"; }).length;
+    $("counts").innerHTML = tracks.length ? "<b>" + tracks.length + "</b> brani nel database" + (list.length !== tracks.length ? " · <b>" + list.length + "</b> " + (activePl && plOf(activePl) ? "in «" + esc(plOf(activePl).name) + "»" : "con i filtri") : "") + " · <b>" + want + "</b> da comprare" : "";
+  }
+  function setDelMode(on) {
+    delMode = on;
+    if (!on) { checked.clear(); bulkArm = false; }
+    $("tablebox").classList.toggle("delmode", on);
+    var b = $("btn-delmode");
+    b.textContent = on ? "Fine selezione" : "Seleziona…";
+    b.classList.toggle("primary", on);
+    renderTable();
+  }
+  function visibleChecked(list) { return list.filter(function (t) { return checked.has(t.id); }); }
+  function renderBulk(list) {
+    var bar = $("bulk");
+    if (!tracks.length || !delMode) { bar.hidden = true; return; }
+    bar.hidden = false;
+    var sel = visibleChecked(list);
+    var nNo = list.filter(function (t) { return interestOf(t) === "no"; }).length;
+    var html = '<button type="button" data-bulk="nope"' + (nNo ? "" : " disabled") + '><span class="star-i no">\u2605</span> Seleziona i non interessanti (' + nNo + ")</button>";
+    if (sel.length) {
+      html += '<span class="note">' + sel.length + (sel.length === 1 ? " brano selezionato" : " brani selezionati") + "</span>";
+      if (playlists.length) html += '<select id="bulk-pl" aria-label="Playlist">' + playlists.map(function (p) { return '<option value="' + esc(p.id) + '"' + (p.id === activePl ? " selected" : "") + ">" + esc(p.name) + "</option>"; }).join("") + '</select><button type="button" data-bulk="pl-add">Aggiungi alla playlist</button>';
+      html += '<input id="bulk-name" placeholder="Nuova playlist\u2026" maxlength="60" aria-label="Nome nuova playlist"><button type="button" data-bulk="pl-new">Crea con i selezionati</button>';
+      if (activePl && plOf(activePl)) html += '<button type="button" data-bulk="pl-remove">Rimuovi dalla playlist</button>';
+      html += '<button type="button" class="danger" data-bulk="del">' + (bulkArm ? "Conferma: elimina " + sel.length : "Elimina dal database") + '</button><button type="button" class="ghost" data-bulk="clear">Deseleziona</button>';
+    } else bulkArm = false;
+    bar.innerHTML = html;
+    var all = $("chk-all");
+    if (all) { all.checked = list.length > 0 && sel.length === list.length; all.indeterminate = sel.length > 0 && sel.length < list.length; }
+  }
+  /* ---------- playlist ---------- */
+  function lsPlLoad() { try { return JSON.parse(localStorage.getItem(LS_PL) || "[]"); } catch (e) { return []; } }
+  function lsPlSave() { try { localStorage.setItem(LS_PL, JSON.stringify(playlists)); } catch (e) { toast("Spazio del browser pieno"); } }
+  function plOf(id) { return playlists.find(function (p) { return p.id === id; }); }
+  function plNamesOf(t) { return playlists.filter(function (p) { return p.ids.indexOf(t.id) >= 0; }).map(function (p) { return p.name; }).join("; "); }
+  function plCount(p) { var have = {}; tracks.forEach(function (t) { have[t.id] = 1; }); return p.ids.filter(function (id) { return have[id]; }).length; }
+  function plSave(p) {
+    if (plCol) { var b = Object.assign({}, p); delete b.id; return plCol.doc(p.id).set(b).catch(function () { toast("Salvataggio playlist non riuscito"); }); }
+    var i = playlists.findIndex(function (x) { return x.id === p.id; });
+    if (i >= 0) playlists[i] = p; else playlists.push(p);
+    lsPlSave(); renderAll(); return Promise.resolve();
+  }
+  function plDelete(id) {
+    if (activePl === id) activePl = null;
+    if (plCol) return plCol.doc(id).delete().catch(function () { toast("Eliminazione playlist non riuscita"); });
+    playlists = playlists.filter(function (x) { return x.id !== id; }); lsPlSave(); renderAll(); return Promise.resolve();
+  }
+  function onPlData(list) {
+    playlists = list.map(function (p) { return Object.assign({ ids: [], name: "" }, p); }).sort(function (a, b) { return (a.createdAt || 0) - (b.createdAt || 0); });
+    if (activePl && !plOf(activePl)) activePl = null;
+    renderAll();
+  }
+  function createPlaylist(name, ids) {
+    name = String(name || "").trim();
+    if (!name) { toast("Scrivi un nome per la playlist"); return null; }
+    if (playlists.some(function (p) { return p.name.toLowerCase() === name.toLowerCase(); })) { toast("Esiste gi\u00e0 una playlist con questo nome"); return null; }
+    var p = { id: uid(), name: name, ids: ids || [], createdAt: Date.now() };
+    plNaming = false; activePl = p.id; checked.clear();
+    plSave(p); renderAll();
+    toast("Playlist \u00ab" + name + "\u00bb creata" + (ids && ids.length ? " con " + ids.length + (ids.length === 1 ? " brano" : " brani") : ""));
+    return p;
+  }
+  function importPlaylists(map) {
+    Object.keys(map).forEach(function (nm) {
+      var pl = playlists.find(function (p) { return p.name.toLowerCase() === nm.toLowerCase(); }) || { id: uid(), name: nm, ids: [], createdAt: Date.now() };
+      var have = {}; pl.ids.forEach(function (id) { have[id] = 1; });
+      plSave(Object.assign({}, pl, { ids: pl.ids.concat(map[nm].filter(function (id) { return !have[id]; })) }));
+    });
+  }
+  function renderPlTabs() {
+    var box = $("pltabs"), ae = document.activeElement;
+    if (ae && (ae.id === "pl-name" || ae.id === "pl-rename")) return;
+    if (!tracks.length && !playlists.length) { box.hidden = true; return; }
+    box.hidden = false;
+    var h = '<button type="button" class="pltab' + (!activePl ? " on" : "") + '" data-pl-tab="">Tutti i brani<span class="n">' + tracks.length + "</span></button>";
+    playlists.forEach(function (p) {
+      h += '<button type="button" class="pltab' + (p.id === activePl ? " on" : "") + '" data-pl-tab="' + esc(p.id) + '">' + esc(p.name) + '<span class="n">' + plCount(p) + "</span></button>";
+    });
+    if (plNaming) h += '<input id="pl-name" placeholder="Nome playlist" maxlength="60"><button type="button" class="primary" data-pl-act="create">Crea</button><button type="button" class="ghost" data-pl-act="cancel">Annulla</button>';
+    else h += '<button type="button" class="pltab add" data-pl-act="new">+ Playlist</button>';
+    var cur = activePl && plOf(activePl);
+    if (cur) {
+      h += '<span class="pltools">';
+      if (plRenaming === cur.id) h += '<input id="pl-rename" value="' + esc(cur.name) + '" maxlength="60"><button type="button" class="primary" data-pl-act="rename-ok">Salva</button><button type="button" class="ghost" data-pl-act="cancel">Annulla</button>';
+      else h += '<button type="button" data-pl-act="rename">Rinomina</button><button type="button" class="danger" data-pl-act="del">' + (plDelArm ? "Conferma: elimina playlist" : "Elimina playlist") + "</button>";
+      h += "</span>";
+    }
+    box.innerHTML = h;
+    var inp = $("pl-name") || $("pl-rename"); if (inp) inp.focus();
+  }
+  function selTrack() { return tracks.find(function (t) { return t.id === selectedId; }); }
+  function renderDeck(force) {
+    var t = selTrack();
+    var sig = mode + "|" + editId + "|" + JSON.stringify(t || null) + "|" + (t && localAudio[t.id] ? 1 : 0) + "|" + (t ? playlists.map(function (p) { return p.id + p.name + (p.ids.indexOf(t.id) >= 0 ? 1 : 0); }).join(",") : "");
+    if (!force && sig === lastDeckSig) return;
+    lastDeckSig = sig;
+    var d = $("deck");
+    if (mode === "edit") { d.innerHTML = formHtml(editId ? tracks.find(function (x) { return x.id === editId; }) : null); bindForm(); return; }
+    if (!t) {
+      d.innerHTML = '<h2>Nessun brano</h2><p class="note" style="margin:0">Seleziona un brano dalla tabella per vedere i dettagli e ascoltarlo.</p>' + noteBlock();
+      return;
+    }
+    var buy = safeUrl(t.buyUrl), listen = safeUrl(t.listenUrl), la = localAudio[t.id];
+    d.innerHTML =
+      '<div class="head">' + coverHtml(t, true) + "<div><h2>" + esc(t.title || "(senza titolo)") + '</h2><div class="artist">' + esc(t.artist) + "</div></div></div>" +
+      '<div class="chips">' +
+      (t.bpm ? '<span class="chip big">' + esc(t.bpm) + " BPM</span>" : "") +
+      (t.key ? '<span class="chip big">' + esc(String(t.key).toUpperCase()) + "</span>" : "") +
+      (t.year ? '<span class="chip">' + esc(t.year) + "</span>" : "") +
+      (t.genre ? '<span class="chip">' + esc(t.genre) + "</span>" : "") +
+      (t.label ? '<span class="chip">' + esc(t.label) + "</span>" : "") + "</div>" +
+      '<div class="row seg" role="group" aria-label="Interesse">' + ["yes", "maybe", "no"].map(function (k) { return '<button type="button" data-int="' + k + '" class="' + (interestOf(t) === k ? "on" : "") + '"><span class="star-i ' + k + '">★</span> ' + INTEREST[k].l + "</button>"; }).join("") + "</div>" +
+      (playlists.length ? '<div class="plseg"><div class="note">Playlist</div><div class="row seg">' + playlists.map(function (p) { return '<button type="button" data-pl="' + esc(p.id) + '" class="' + (p.ids.indexOf(t.id) >= 0 ? "on" : "") + '">' + (p.ids.indexOf(t.id) >= 0 ? "\u2713 " : "+ ") + esc(p.name) + "</button>"; }).join("") + "</div></div>" : "") +
+      (t.notes ? '<div class="note">' + linkify(t.notes) + "</div>" : "") +
+      playerHtml(t) +
+      (la ? '<audio id="player" controls preload="metadata" src="' + esc(la.url) + '"></audio><div class="note">' + esc(la.name) + "</div>"
+          : '<div class="drop" id="drop"><span>Nessuna anteprima audio collegata. Trascina qui un file audio (o un&#39;immagine per la copertina) oppure sceglilo.</span><button type="button" id="btn-attach">Collega file audio</button></div>') +
+      '<div class="row">' +
+      (listen ? '<a class="btn" href="' + esc(listen) + '" target="_blank" rel="noopener noreferrer">Ascolta online ↗</a>' : "") +
+      (buy ? '<a class="btn primary" href="' + esc(buy) + '" target="_blank" rel="noopener noreferrer">Vai allo store ↗</a>' : "") + "</div>" +
+      '<div class="row"><button id="btn-cover" type="button">' + (t.cover || t.coverUrl ? "Cambia copertina" : "Aggiungi copertina") + '</button><button id="btn-cover-url" type="button">Da link\u2026</button><button id="btn-cover-find" type="button">Cerca online</button>' + (t.cover || t.coverUrl ? '<button id="btn-cover-del" type="button" class="ghost">Rimuovi copertina</button>' : "") + '</div><div class="row"><button id="btn-status">' + (t.status === "have" ? "Segna da comprare" : "Segna comprato") + '</button><button id="btn-edit">Modifica</button><button id="btn-del" class="danger">Elimina</button></div>' +
+      noteBlock();
+    $("btn-status").onclick = function () { saveTrack(Object.assign({}, t, { status: t.status === "have" ? "want" : "have" })); };
+    Array.prototype.forEach.call(d.querySelectorAll("[data-int]"), function (b) { b.onclick = function () { saveTrack(Object.assign({}, t, { interest: b.dataset.int })); }; });
+    $("btn-cover").onclick = function () { pickImage(function (f) { setCover(t.id, f); }); };
+    $("btn-cover-url").onclick = function () {
+      var u = window.prompt("Incolla l'indirizzo dell'immagine di copertina (https://\u2026)"); if (u) setCoverUrl(t.id, u.trim());
+    };
+    $("btn-cover-find").onclick = function () { searchCover(t.id); };
+    var cd = $("btn-cover-del"); if (cd) cd.onclick = function () { var n = Object.assign({}, t); delete n.cover; delete n.coverUrl; saveTrack(n); };
+    Array.prototype.forEach.call(d.querySelectorAll("[data-pl]"), function (b) {
+      b.onclick = function () {
+        var pl = plOf(b.dataset.pl); if (!pl) return;
+        var on = pl.ids.indexOf(t.id) >= 0;
+        plSave(Object.assign({}, pl, { ids: on ? pl.ids.filter(function (x) { return x !== t.id; }) : pl.ids.concat(t.id) }));
+        toast(on ? "Tolto da \u00ab" + pl.name + "\u00bb" : "Aggiunto a \u00ab" + pl.name + "\u00bb");
+      };
+    });
+    $("btn-edit").onclick = function () { mode = "edit"; editId = t.id; renderDeck(true); };
+    $("btn-del").onclick = function () {
+      var b = this;
+      if (b.dataset.arm) { selectedId = null; deleteTrack(t.id); toast("Brano eliminato"); }
+      else { b.dataset.arm = "1"; b.textContent = "Conferma eliminazione"; setTimeout(function () { if (b.isConnected) { delete b.dataset.arm; b.textContent = "Elimina"; } }, 3000); }
+    };
+    if (!la) {
+      var drop = $("drop");
+      $("btn-attach").onclick = function () { pickAudio(function (f) { attachAudio(t.id, f); }); };
+      drop.ondragover = function (e) { e.preventDefault(); drop.classList.add("over"); };
+      drop.ondragleave = function () { drop.classList.remove("over"); };
+      drop.ondrop = function (e) { e.preventDefault(); drop.classList.remove("over"); var f = e.dataTransfer.files[0]; if (f) { if (/^image\//.test(f.type)) setCover(t.id, f); else attachAudio(t.id, f); } };
+    }
+  }
+  function noteBlock() {
+    return '<div class="note">I file audio collegati restano in questa pagina finché non la chiudi. I link di ascolto e acquisto vengono salvati.</div>';
+  }
+  function renderAll() {
+    renderFilterOptions(); renderHead(); renderPlTabs(); renderTable(); renderDeck(false);
+  }
+
+  /* ---------- audio ---------- */
+  function pickAudio(cb) {
+    var i = document.createElement("input"); i.type = "file"; i.accept = "audio/*";
+    i.onchange = function () { if (i.files[0]) cb(i.files[0]); }; i.click();
+  }
+  function attachAudio(id, file) {
+    if (localAudio[id]) URL.revokeObjectURL(localAudio[id].url);
+    localAudio[id] = { url: URL.createObjectURL(file), name: file.name };
+    renderDeck(true);
+    enrichFromFile(id, file);
+    setTimeout(function () { var p = $("player"); if (p) p.play().catch(function () {}); }, 50);
+  }
+  function parseFileName(name) {
+    var base = name.replace(/\.[a-z0-9]{2,5}$/i, "").replace(/_/g, " ").trim();
+    var m = /^(.+?)\s+[-–—]\s+(.+)$/.exec(base);
+    return m ? { artist: m[1].trim(), title: m[2].trim() } : { artist: "", title: base };
+  }
+  async function importAudioFiles(files) {
+    files = Array.prototype.slice.call(files);
+    var last = null, now = Date.now(), withTags = 0;
+    for (var i = 0; i < files.length; i++) {
+      var f = files[i], p = parseFileName(f.name), id = uid();
+      var m = /\.mp3$/i.test(f.name) ? await readId3(f) : {};
+      var fl = metaFields(m), cover = await metaCover(m);
+      if (fl.title || fl.bpm || fl.key || cover) withTags++;
+      localAudio[id] = { url: URL.createObjectURL(f), name: f.name };
+      var t = Object.assign({ id: id, title: p.title, artist: p.artist, status: "want", createdAt: now + i }, fl);
+      if (cover) t.cover = cover;
+      await saveTrack(t);
+      last = id;
+    }
+    if (last) {
+      selectedId = last; mode = "view"; renderAll(); renderDeck(true);
+      toast(files.length + (files.length === 1 ? " brano aggiunto. " : " brani aggiunti. ") + (withTags ? "Letti i tag di " + withTags + " file." : "Completa BPM, tonalit\u00e0 e genere dalla scheda."));
+    }
+  }
+
+  /* ---------- tag MP3 (ID3v2): titolo, artista, BPM, key, copertina ---------- */
+  var ID3_MAP = { TIT2: "title", TT2: "title", TPE1: "artist", TP1: "artist", TYER: "year", TYE: "year", TDRC: "year", TCON: "genre", TCO: "genre", TBPM: "bpm", TBP: "bpm", TKEY: "key", TKE: "key", APIC: "cover", PIC: "cover" };
+  function syncsafe(b, o) { return (b[o] << 21) | (b[o + 1] << 14) | (b[o + 2] << 7) | b[o + 3]; }
+  function decodeText(b, enc) {
+    try {
+      var s;
+      if (enc === 1) {
+        var bom = (b[0] === 0xFF && b[1] === 0xFE) || (b[0] === 0xFE && b[1] === 0xFF);
+        s = new TextDecoder(b[0] === 0xFE && b[1] === 0xFF ? "utf-16be" : "utf-16le").decode(bom ? b.subarray(2) : b);
+      } else if (enc === 2) s = new TextDecoder("utf-16be").decode(b);
+      else if (enc === 3) s = new TextDecoder("utf-8").decode(b);
+      else s = new TextDecoder("windows-1252").decode(b);
+      return s.split("\0")[0].trim();
+    } catch (e) { return ""; }
+  }
+  function parseApic(d, v22) {
+    var enc = d[0], p;
+    if (v22) p = 4;
+    else { var e = d.indexOf(0, 1); if (e < 0) return null; p = e + 1; }
+    p += 1; // tipo immagine
+    if (enc === 1 || enc === 2) { while (p + 1 < d.length && !(d[p] === 0 && d[p + 1] === 0)) p += 2; p += 2; }
+    else { while (p < d.length && d[p] !== 0) p++; p += 1; }
+    if (p >= d.length) return null;
+    return { data: d.subarray(p) };
+  }
+  function parseId3(b) {
+    var out = {};
+    if (b.length < 10 || b[0] !== 0x49 || b[1] !== 0x44 || b[2] !== 0x33) return out;
+    var ver = b[3], flags = b[5], size = syncsafe(b, 6), pos = 10, end = Math.min(b.length, 10 + size);
+    if (ver < 2 || ver > 4) return out;
+    if ((flags & 0x40) && ver >= 3) {
+      pos += ver === 4 ? syncsafe(b, pos) : (((b[pos] << 24) | (b[pos + 1] << 16) | (b[pos + 2] << 8) | b[pos + 3]) >>> 0) + 4;
+    }
+    var idLen = ver === 2 ? 3 : 4, hdr = ver === 2 ? 6 : 10;
+    while (pos + hdr <= end) {
+      if (b[pos] === 0) break;
+      var id = String.fromCharCode.apply(null, b.subarray(pos, pos + idLen));
+      var fs = ver === 2 ? ((b[pos + 3] << 16) | (b[pos + 4] << 8) | b[pos + 5])
+        : ver === 4 ? syncsafe(b, pos + 4)
+        : (((b[pos + 4] << 24) | (b[pos + 5] << 16) | (b[pos + 6] << 8) | b[pos + 7]) >>> 0);
+      var ds = pos + hdr, de = ds + fs;
+      if (fs <= 0 || de > end) break;
+      var d = b.subarray(ds, de), tag = ID3_MAP[id];
+      if (tag === "cover") { if (!out.cover) out.cover = parseApic(d, ver === 2); }
+      else if (tag) { var txt = decodeText(d.subarray(1), d[0]); if (txt && !out[tag]) out[tag] = txt; }
+      pos = de;
+    }
+    return out;
+  }
+  async function readId3(file) {
+    try {
+      var head = new Uint8Array(await file.slice(0, 10).arrayBuffer());
+      if (head[0] !== 0x49 || head[1] !== 0x44 || head[2] !== 0x33) return {};
+      var size = syncsafe(head, 6);
+      return parseId3(new Uint8Array(await file.slice(0, Math.min(10 + size, 8 * 1024 * 1024)).arrayBuffer()));
+    } catch (e) { return {}; }
+  }
+  function metaFields(m) {
+    var f = {};
+    if (m.title) f.title = m.title;
+    if (m.artist) f.artist = m.artist;
+    var y = parseInt(String(m.year || "").slice(0, 4), 10); if (y > 1900 && y < 2100) f.year = y;
+    if (m.genre && !/^\(?\d+\)?$/.test(m.genre)) f.genre = m.genre;
+    var bp = parseFloat(String(m.bpm || "").replace(",", ".")); if (bp > 30 && bp < 300) f.bpm = Math.round(bp * 10) / 10;
+    if (m.key && parseKey(m.key)) f.key = m.key.replace(/\s+/g, "").toUpperCase();
+    return f;
+  }
+  function imageToThumb(blob) {
+    return new Promise(function (res) {
+      var url = URL.createObjectURL(blob), img = new Image();
+      img.onload = function () {
+        var s = Math.min(img.naturalWidth, img.naturalHeight), c = document.createElement("canvas");
+        c.width = c.height = 128;
+        c.getContext("2d").drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, 0, 0, 128, 128);
+        URL.revokeObjectURL(url);
+        try { res(c.toDataURL("image/jpeg", 0.8)); } catch (e) { res(""); }
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); res(""); };
+      img.src = url;
+    });
+  }
+  async function metaCover(m) {
+    if (!m.cover) return "";
+    var d = m.cover.data;
+    return imageToThumb(new Blob([d], { type: d[0] === 0x89 ? "image/png" : "image/jpeg" }));
+  }
+  async function setCover(id, file) {
+    var url = await imageToThumb(file);
+    if (!url) { toast("Immagine non leggibile"); return; }
+    var t = tracks.find(function (x) { return x.id === id; }); if (!t) return;
+    saveTrack(Object.assign({}, t, { cover: url })); toast("Copertina aggiornata");
+  }
+  async function enrichFromFile(id, file) {
+    if (!/\.mp3$/i.test(file.name)) return;
+    var m = await readId3(file), fl = metaFields(m), patch = {};
+    var t = tracks.find(function (x) { return x.id === id; }); if (!t) return;
+    ["year", "genre", "bpm", "key"].forEach(function (k) { if (!t[k] && fl[k]) patch[k] = fl[k]; });
+    if (!t.cover) { var c = await metaCover(m); if (c) patch.cover = c; }
+    if (Object.keys(patch).length) { saveTrack(Object.assign({}, tracks.find(function (x) { return x.id === id; }) || t, patch)); toast("Dati letti dai tag del file"); }
+  }
+  async function setCoverUrl(id, url, quiet) {
+    url = safeUrl(url); if (!url) { toast("Indirizzo immagine non valido"); return; }
+    var t = tracks.find(function (x) { return x.id === id; }); if (!t) return;
+    var patch = { coverUrl: url, cover: "" };
+    try {
+      var r = await fetch(url, { mode: "cors" });
+      if (r.ok) { var th = await imageToThumb(await r.blob()); if (th) patch = { cover: th, coverUrl: "" }; }
+    } catch (e) {}
+    await saveTrack(Object.assign({}, tracks.find(function (x) { return x.id === id; }) || t, patch));
+    if (!quiet) toast(patch.cover ? "Copertina salvata" : "Copertina collegata al link");
+  }
+  function normTxt(x) { return String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim(); }
+  function pickArtwork(results, t, strict) {
+    var core = normTxt(String(t.title || "").split(/[\(\[\-\u2013]/)[0]);
+    var art = normTxt(t.artist).split(" ")[0] || "";
+    var withArt = (results || []).filter(function (x) { return x.artworkUrl100; });
+    var good = withArt.find(function (x) {
+      var tn = normTxt(x.trackName);
+      var okTitle = core && (tn.indexOf(core) >= 0 || core.indexOf(tn.split(" (")[0]) >= 0 && tn.length > 2);
+      var okArtist = !art || art.length < 3 || normTxt(x.artistName).indexOf(art) >= 0;
+      return okTitle && okArtist;
+    });
+    return good || (strict ? null : withArt[0] || null);
+  }
+  var coverBatch = { running: false, stop: false };
+  async function findMissingCovers() {
+    if (coverBatch.running) { coverBatch.stop = true; return; }
+    var todo = tracks.filter(function (t) { return !t.cover && !t.coverUrl && String(t.title || "").trim(); });
+    if (!todo.length) { toast("Tutti i brani hanno già una copertina"); return; }
+    coverBatch.running = true; coverBatch.stop = false;
+    var btn = $("btn-covers"), found = 0, done = 0, failed = false;
+    for (var i = 0; i < todo.length && !coverBatch.stop; i++) {
+      btn.textContent = "Interrompi (" + (i + 1) + "/" + todo.length + ")";
+      var t = todo[i];
+      try {
+        var r = await fetch("https://itunes.apple.com/search?media=music&entity=song&limit=8&term=" + encodeURIComponent([t.artist, t.title].filter(Boolean).join(" ")));
+        if (!r.ok) { toast("Troppe richieste: riprova tra qualche minuto"); failed = true; break; }
+        var j = await r.json();
+        var hit = pickArtwork(j.results, t, true);
+        if (hit) { await setCoverUrl(t.id, hit.artworkUrl100.replace(/\/\d+x\d+bb\./, "/300x300bb."), true); found++; }
+      } catch (e) { toast("Ricerca interrotta: serve la connessione a internet"); failed = true; break; }
+      done++;
+      await new Promise(function (res) { setTimeout(res, 3200); });
+    }
+    coverBatch.running = false; btn.textContent = "Cerca copertine mancanti";
+    if (!failed) toast(found + " copertine trovate su " + done + " brani cercati" + (coverBatch.stop ? " (interrotto)" : "") + ". I brani non trovati restano senza.");
+  }
+  async function searchCover(id) {
+    var t = tracks.find(function (x) { return x.id === id; }); if (!t) return;
+    var q = [t.artist, t.title].filter(Boolean).join(" ");
+    if (!q) { toast("Serve almeno il titolo del brano"); return; }
+    toast("Cerco la copertina\u2026");
+    try {
+      var r = await fetch("https://itunes.apple.com/search?media=music&entity=song&limit=5&term=" + encodeURIComponent(q));
+      var j = await r.json();
+      var hit = pickArtwork(j.results, t, false);
+      if (!hit) { toast("Nessuna copertina trovata"); return; }
+      await setCoverUrl(id, hit.artworkUrl100.replace(/\/\d+x\d+bb\./, "/300x300bb."));
+    } catch (e) { toast("Ricerca non riuscita: serve la connessione a internet"); }
+  }
+  /* ---------- lettore: YouTube, SoundCloud, Spotify, Apple Music, mp3 diretti ---------- */
+  function embedFor(u) {
+    var url = safeUrl(u); if (!url) return null;
+    var x = new URL(url), h = x.hostname.replace(/^www\.|^m\./, ""), p = x.pathname, m, id = null;
+    if (h === "youtu.be") id = p.slice(1).split("/")[0];
+    else if (h === "youtube.com" || h === "music.youtube.com") {
+      id = x.searchParams.get("v");
+      if (!id && (m = /^\/(embed|shorts|live)\/([\w-]{6,})/.exec(p))) id = m[2];
+    }
+    if (id && /^[\w-]{6,20}$/.test(id)) return { kind: "yt", id: id, src: "https://www.youtube.com/embed/" + id + "?rel=0" };
+    if (h === "soundcloud.com" || h === "on.soundcloud.com")
+      return { kind: "frame", h: /\/sets\//.test(p) ? 300 : 166, src: "https://w.soundcloud.com/player/?url=" + encodeURIComponent(url) + "&auto_play=false&hide_related=true&show_comments=false&visual=false" };
+    if (h === "open.spotify.com" && (m = /^\/(?:intl-[a-z]+\/)?(track|album|playlist|episode|show)\/([A-Za-z0-9]+)/.exec(p)))
+      return { kind: "frame", h: m[1] === "track" || m[1] === "episode" ? 152 : 352, src: "https://open.spotify.com/embed/" + m[1] + "/" + m[2] };
+    if (h === "music.apple.com") return { kind: "frame", h: x.searchParams.get("i") ? 175 : 450, src: url.replace("//music.apple.com", "//embed.music.apple.com") };
+    if (/\.(mp3|m4a|aac|wav|ogg|oga|opus|flac)$/i.test(p)) return { kind: "audio", src: url };
+    return null;
+  }
+  function playerHtml(t) {
+    var e = embedFor(t.listenUrl); if (!e) return "";
+    var allow = 'allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"';
+    if (e.kind === "audio") return '<div class="player"><audio class="embed" controls preload="none" src="' + esc(e.src) + '"></audio></div>';
+    if (e.kind === "yt") {
+      if (location.protocol === "file:") return '<div class="player"><a class="embed yt ytthumb" href="https://www.youtube.com/watch?v=' + esc(e.id) + '" target="_blank" rel="noopener noreferrer" style="background-image:url(https://i.ytimg.com/vi/' + esc(e.id) + '/hqdefault.jpg)"><span>\u25b6 Apri su YouTube</span></a>' +
+        '<div class="note">Aperta come file, la pagina non può incorporare YouTube. Per il lettore qui accanto serve aprirla da un indirizzo web (vedi le istruzioni).</div></div>';
+      return '<div class="player"><iframe class="embed yt" src="' + esc(e.src) + '" title="Anteprima video" ' + allow + ' loading="lazy"></iframe></div>';
+    }
+    return '<div class="player"><iframe class="embed" style="height:' + e.h + 'px" src="' + esc(e.src) + '" title="Anteprima brano" ' + allow + ' loading="lazy"></iframe></div>';
+  }
+  function pickImage(cb) {
+    var i = document.createElement("input"); i.type = "file"; i.accept = "image/*";
+    i.onchange = function () { if (i.files[0]) cb(i.files[0]); }; i.click();
+  }
+  function coverHtml(t, big) {
+    var src = t.cover && /^data:image\//.test(t.cover) ? t.cover : safeUrl(t.coverUrl);
+    return src ? '<img class="cov' + (big ? " big" : "") + '" src="' + esc(src) + '" alt="" referrerpolicy="no-referrer" loading="lazy">' : '<span class="cov ph' + (big ? " big" : "") + '">\u266a</span>';
+  }
+
+  /* ---------- form ---------- */
+  function formHtml(t) {
+    t = t || {};
+    function f(id, label, val, extra) { return '<label class="' + ((extra && extra.cls) || "") + '">' + label + '<input id="e-' + id + '" value="' + esc(val == null ? "" : val) + '" ' + ((extra && extra.attr) || "") + "></label>"; }
+    return '<h2>' + (editId ? "Modifica brano" : "Nuovo brano") + '</h2><form id="form" autocomplete="off">' +
+      f("title", "Titolo", t.title, { cls: "full", attr: "required" }) +
+      f("artist", "Artista", t.artist, { cls: "full" }) +
+      f("year", "Anno", t.year, { attr: 'type="number" inputmode="numeric" min="1900" max="2100"' }) +
+      f("genre", "Genere", t.genre) +
+      f("bpm", "BPM", t.bpm, { attr: 'type="number" step="0.1" inputmode="decimal"' }) +
+      f("key", "Tonalità (Camelot)", t.key, { attr: 'list="keys" placeholder="8A"' }) +
+      f("label", "Etichetta", t.label, { cls: "full" }) +
+      f("buyUrl", "Link allo store", t.buyUrl, { cls: "full", attr: 'type="url" placeholder="https://…"' }) +
+      f("listenUrl", "Link di ascolto", t.listenUrl, { cls: "full", attr: 'type="url" placeholder="https://…"' }) +
+      '<label class="full">Stato<select id="e-status"><option value="want"' + (t.status !== "have" ? " selected" : "") + '>Da comprare</option><option value="have"' + (t.status === "have" ? " selected" : "") + ">Comprato</option></select></label>" +
+      '<label class="full">Interesse<select id="e-interest">' + ["yes", "maybe", "no"].map(function (k) { return '<option value="' + k + '"' + (interestOf(t) === k ? " selected" : "") + ">" + INTEREST[k].l + "</option>"; }).join("") + "</select></label>" +
+      '<label class="full">Note<textarea id="e-notes">' + esc(t.notes || "") + "</textarea></label>" +
+      '<div class="row full"><button class="primary" type="submit">Salva</button><button type="button" id="e-cancel">Annulla</button></div></form>';
+  }
+  function bindForm() {
+    $("form").onsubmit = function (e) {
+      e.preventDefault();
+      var old = editId ? tracks.find(function (x) { return x.id === editId; }) : null;
+      var v = function (k) { return $("e-" + k).value.trim(); };
+      var num = function (k) { var x = parseFloat(v(k)); return isNaN(x) ? null : x; };
+      var t = Object.assign({}, old || {}, {
+        id: old ? old.id : uid(), createdAt: old ? old.createdAt : Date.now(),
+        title: v("title"), artist: v("artist"), year: num("year"), genre: v("genre"), bpm: num("bpm"),
+        key: v("key").toUpperCase(), label: v("label"), buyUrl: v("buyUrl"), listenUrl: v("listenUrl"),
+        status: $("e-status").value, interest: $("e-interest").value, notes: v("notes")
+      });
+      delete t.example;
+      selectedId = t.id; mode = "view"; editId = null; lastDeckSig = "";
+      saveTrack(t).then(function () { toast("Salvato"); renderAll(); });
+    };
+    $("e-cancel").onclick = function () { mode = "view"; editId = null; renderDeck(true); };
+    setTimeout(function () { var el = $("e-title"); if (el) el.focus(); }, 0);
+  }
+
+  /* ---------- CSV ---------- */
+  var CSV_HEAD = ["titolo", "artista", "anno", "genere", "bpm", "tonalita", "etichetta", "stato", "interesse", "playlist", "link_acquisto", "link_ascolto", "note"];
+  var CSV_MAP = {
+    titolo: "title", title: "title", brano: "title", artista: "artist", artist: "artist", anno: "year", year: "year",
+    genere: "genre", genre: "genre", bpm: "bpm", tonalita: "key", "tonalità": "key", key: "key",
+    etichetta: "label", label: "label", stato: "status", status: "status", link_acquisto: "buyUrl", buy: "buyUrl", link_ascolto: "listenUrl", listen: "listenUrl",
+    note: "notes", notes: "notes", interesse: "interest", interest: "interest", "link acquisto": "buyUrl", "link ascolto": "listenUrl", playlist: "playlist"
+  };
+  function csvCell(v) { v = v == null ? "" : String(v); return /[",;\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  function toCsv(list) {
+    var rows = [CSV_HEAD.join(",")];
+    list.forEach(function (t) {
+      rows.push([t.title, t.artist, t.year, t.genre, t.bpm, t.key, t.label, t.status === "have" ? "comprato" : "da comprare", INTEREST[interestOf(t)].l.toLowerCase(), plNamesOf(t), t.buyUrl, t.listenUrl, t.notes].map(csvCell).join(","));
+    });
+    return "﻿" + rows.join("\r\n");
+  }
+  function parseCsv(text) {
+    text = text.replace(/^﻿/, "");
+    var first = text.split(/\r?\n/)[0] || "";
+    var delim = (first.match(/;/g) || []).length > (first.match(/,/g) || []).length ? ";" : ",";
+    var rows = [], row = [], cell = "", q = false;
+    for (var i = 0; i < text.length; i++) {
+      var c = text[i];
+      if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+      else if (c === '"') q = true;
+      else if (c === delim) { row.push(cell); cell = ""; }
+      else if (c === "\n") { row.push(cell); rows.push(row); row = []; cell = ""; }
+      else if (c !== "\r") cell += c;
+    }
+    if (cell || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter(function (r) { return r.some(function (x) { return x.trim(); }); });
+  }
+  function importCsv(text) { importRows(parseCsv(text)); }
+  function importRows(rows) {
+    if (rows.length < 2) { toast("File vuoto o senza righe"); return; }
+    var map = rows[0].map(function (h) { return CSV_MAP[h.trim().toLowerCase()]; });
+    if (map.indexOf("title") < 0) { toast("Manca la colonna «titolo»"); return; }
+    var now = Date.now(), n = 0, plImport = {};
+    rows.slice(1).forEach(function (r, i) {
+      var t = { id: uid(), createdAt: now + i, status: "want" }, plNames = [];
+      map.forEach(function (k, ci) {
+        if (!k) return; var v = (r[ci] || "").trim(); if (!v) return;
+        if (k === "year" || k === "bpm") { var x = parseFloat(v.replace(",", ".")); if (!isNaN(x)) t[k] = x; }
+        else if (k === "status") t.status = /compr(ato|ati)|have|bought/i.test(v) ? "have" : "want";
+        else if (k === "key") t.key = v.toUpperCase();
+        else if (k === "interest") t.interest = parseInterest(v);
+        else if (k === "playlist") plNames = v.split(/[;|]/).map(function (x) { return x.trim(); }).filter(Boolean);
+        else t[k] = v;
+      });
+      if (t.title) { saveTrack(t); n++; plNames.forEach(function (nm) { (plImport[nm] = plImport[nm] || []).push(t.id); }); }
+    });
+    importPlaylists(plImport);
+    toast(n + " brani importati");
+  }
+  function renderBackupInfo() {
+    var el = $("bk-last"), v = null;
+    try { v = localStorage.getItem(LS_BK); } catch (e) {}
+    el.textContent = v ? "Ultimo backup: " + new Date(v).toLocaleDateString("it-IT") : "Nessun backup salvato da questo browser.";
+  }
+  async function saveBackup() {
+    try {
+      var dl = window.claude && window.claude.use ? await window.claude.use("downloads") : null;
+      if (!dl) { toast("Esportazione non disponibile in questa vista"); return; }
+      var d = new Date(), stamp = d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+      var payload = { app: "crate-dj", format: 1, savedAt: d.toISOString(), tracks: tracks, playlists: playlists };
+      await dl.save({ filename: "crate-dj-backup-" + stamp + ".json", data: JSON.stringify(payload) });
+      try { localStorage.setItem(LS_BK, d.toISOString()); } catch (e) {}
+      renderBackupInfo();
+      toast("Backup salvato: " + tracks.length + " brani, " + playlists.length + " playlist");
+    } catch (e) { if (!e || e.code !== "declined") toast("Backup non riuscito"); }
+  }
+  async function restoreBackup(obj) {
+    if (!obj || obj.app !== "crate-dj" || !Array.isArray(obj.tracks)) { toast("Questo file non è un backup di Crate DJ"); return; }
+    var inT = obj.tracks.filter(function (t) { return t && t.id; });
+    var inP = (obj.playlists || []).filter(function (x) { return x && x.id && Array.isArray(x.ids); });
+    if (dbCol) {
+      for (var i = 0; i < inT.length; i++) await saveTrack(inT[i]);
+      for (var j = 0; j < inP.length; j++) await plSave(inP[j]);
+    } else {
+      var byId = {}; tracks.forEach(function (t) { byId[t.id] = t; }); inT.forEach(function (t) { byId[t.id] = t; });
+      tracks = Object.keys(byId).map(function (k) { return byId[k]; });
+      var pBy = {}; playlists.forEach(function (x) { pBy[x.id] = x; }); inP.forEach(function (x) { pBy[x.id] = x; });
+      playlists = Object.keys(pBy).map(function (k) { return pBy[k]; });
+      lsSave(); lsPlSave(); renderAll();
+    }
+    toast("Ripristinati " + inT.length + " brani e " + inP.length + " playlist");
+  }
+  async function exportCsv() {
+    var list = filtered(); if (!list.length) { toast("Niente da esportare"); return; }
+    try {
+      var dl = window.claude && window.claude.use ? await window.claude.use("downloads") : null;
+      if (!dl) { toast("Esportazione non disponibile in questa vista"); return; }
+      await dl.save({ filename: "crate-dj.csv", data: toCsv(list) });
+      toast("CSV esportato (" + list.length + " brani)");
+    } catch (e) { if (!e || e.code !== "declined") toast("Esportazione non riuscita"); }
+  }
+
+  async function exportXlsx() {
+    var list = filtered(); if (!list.length) { toast("Niente da esportare"); return; }
+    if (!window.XLSX) { toast("Libreria Excel non caricata: riprova o usa il CSV"); return; }
+    try {
+      var dl = window.claude && window.claude.use ? await window.claude.use("downloads") : null;
+      if (!dl) { toast("Esportazione non disponibile in questa vista"); return; }
+      var rows = [["Brano", "Artista", "Anno", "Genere", "BPM", "Tonalità", "Etichetta", "Interesse", "Stato", "Playlist", "Link acquisto", "Link ascolto", "Note"]];
+      list.forEach(function (t) {
+        rows.push([t.title || "", t.artist || "", t.year == null ? "" : t.year, t.genre || "", t.bpm == null ? "" : t.bpm, t.key || "", t.label || "",
+          INTEREST[interestOf(t)].l, t.status === "have" ? "Comprato" : "Da comprare", plNamesOf(t), t.buyUrl || "", t.listenUrl || "", t.notes || ""]);
+      });
+      var ws = XLSX.utils.aoa_to_sheet(rows);
+      ws["!cols"] = [34, 26, 7, 18, 7, 9, 20, 16, 14, 24, 40, 40, 40].map(function (w) { return { wch: w }; });
+      ws["!autofilter"] = { ref: "A1:M" + rows.length };
+      var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Crate");
+      var buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      await dl.save({ filename: "crate-dj.xlsx", data: buf });
+      toast("Excel esportato (" + list.length + " brani)");
+    } catch (e) { if (!e || e.code !== "declined") toast("Esportazione non riuscita"); }
+  }
+
+  /* ---------- esempi ---------- */
+  function loadSamples() {
+    var S = [
+      ["Strobe", "deadmau5", 2009, "Progressive House", 128, "8A", "Mau5trap", "want"],
+      ["Gypsy Woman (She's Homeless)", "Crystal Waters", 1991, "House", 122, "5A", "A&M", "have"],
+      ["Mylo Rework Vol. 2", "Artista di esempio", 2019, "Deep House", 122, "9A", "Etichetta A", "want"],
+      ["Jaded Nights", "Artista di esempio", 2021, "Deep House", 124, "8A", "Etichetta A", "want"],
+      ["Midnight Circuit", "Artista di esempio", 2022, "Techno", 132, "9B", "Etichetta B", "want"],
+      ["Hard Wire", "Artista di esempio", 2023, "Techno", 138, "10A", "Etichetta B", "have"],
+      ["Sunset Strip", "Artista di esempio", 2018, "Nu Disco", 118, "11B", "Etichetta C", "want"],
+      ["Velvet Rope", "Artista di esempio", 2017, "Nu Disco", 116, "12B", "Etichetta C", "want"],
+      ["Basement Tape", "Artista di esempio", 2020, "Afro House", 123, "7A", "Etichetta D", "want"],
+      ["Dust & Drum", "Artista di esempio", 2024, "Afro House", 120, "8B", "Etichetta D", "have"],
+      ["Low Orbit", "Artista di esempio", 2015, "Drum & Bass", 174, "6A", "Etichetta E", "want"],
+      ["Neon Tide", "Artista di esempio", 2016, "Trance", 138, "9A", "Etichetta F", "want"]
+    ];
+    var now = Date.now();
+    S.forEach(function (s, i) {
+      saveTrack({ id: uid(), createdAt: now + i, example: true, title: s[0], artist: s[1], year: s[2], genre: s[3], bpm: s[4], key: s[5], label: s[6], status: s[7] });
+    });
+    toast("12 brani di esempio caricati. Per eliminarli usa «Seleziona…».");
+  }
+
+  /* ---------- eventi ---------- */
+  function init() {
+    $("keys").innerHTML = CAMELOT.map(function (k) { return '<option value="' + k + '">'; }).join("");
+    ["f-q", "f-genre", "f-key", "f-status", "f-interest", "f-y1", "f-y2", "f-b1", "f-b2"].forEach(function (id) {
+      $(id).addEventListener("input", renderTable);
+    });
+    $("f-reset").onclick = resetFilters;
+    $("f-mix").onclick = function () {
+      if (!mixOnly && !selTrack()) { toast("Seleziona prima un brano nella tabella"); return; }
+      mixOnly = !mixOnly; this.setAttribute("aria-pressed", mixOnly); this.classList.toggle("primary", mixOnly); renderTable();
+    };
+    $("thead").onclick = function (e) {
+      var th = e.target.closest("th"); if (!th || !th.dataset.k) return;
+      var k = th.dataset.k;
+      if (sortKey === k) sortDir = sortDir === "asc" ? "desc" : "asc"; else { sortKey = k; sortDir = "asc"; }
+      renderHead(); renderTable();
+    };
+    $("tbody").onclick = function (e) {
+      var tr = e.target.closest("tr"); if (!tr) return;
+      if (e.target.closest("td.chk")) {
+        var cid = tr.dataset.id; if (checked.has(cid)) checked.delete(cid); else checked.add(cid);
+        bulkArm = false; renderTable(); return;
+      }
+      if (e.target.closest(".star")) {
+        var tt = tracks.find(function (x) { return x.id === tr.dataset.id; });
+        if (tt) saveTrack(Object.assign({}, tt, { interest: INT_NEXT[interestOf(tt)] }));
+        return;
+      }
+      selectedId = tr.dataset.id; mode = "view"; editId = null;
+      renderTable(); renderDeck(false);
+      if (window.matchMedia("(max-width: 860px)").matches) $("deck").scrollIntoView({ block: "nearest" });
+    };
+    $("empty").onclick = function (e) {
+      var a = e.target.dataset.act; if (!a) return;
+      if (a === "new") openNew(); else if (a === "samples") loadSamples(); else if (a === "reset") resetFilters();
+    };
+    $("btn-add").onclick = openNew;
+    document.addEventListener("paste", function (e) {
+      if (mode === "edit" || !selTrack()) return;
+      var items = (e.clipboardData && e.clipboardData.items) || [];
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf("image/") === 0) { var f = items[i].getAsFile(); if (f) { e.preventDefault(); setCover(selectedId, f); return; } }
+      }
+    });
+    $("btn-delmode").onclick = function () { setDelMode(!delMode); };
+    function doRename() {
+      var cur = plOf(activePl), inp = $("pl-rename"); if (!cur || !inp) return;
+      var nm = inp.value.trim();
+      if (!nm) { toast("Scrivi un nome per la playlist"); return; }
+      if (playlists.some(function (x) { return x.id !== cur.id && x.name.toLowerCase() === nm.toLowerCase(); })) { toast("Esiste già una playlist con questo nome"); return; }
+      inp.blur(); plRenaming = null;
+      plSave(Object.assign({}, cur, { name: nm })); renderPlTabs();
+    }
+    $("pltabs").onclick = function (e) {
+      var tab = e.target.closest("[data-pl-tab]");
+      if (tab) { activePl = tab.dataset.plTab || null; plNaming = false; plRenaming = null; plDelArm = false; checked.clear(); bulkArm = false; renderAll(); return; }
+      var b = e.target.closest("[data-pl-act]"); if (!b) return;
+      var a = b.dataset.plAct;
+      if (a === "new") { plNaming = true; plRenaming = null; renderPlTabs(); }
+      else if (a === "cancel") { plNaming = false; plRenaming = null; renderPlTabs(); }
+      else if (a === "create") { createPlaylist($("pl-name") && $("pl-name").value, []); }
+      else if (a === "rename") { plRenaming = activePl; plNaming = false; plDelArm = false; renderPlTabs(); }
+      else if (a === "rename-ok") doRename();
+      else if (a === "del") {
+        if (!plDelArm) { plDelArm = true; clearTimeout(plTimer); plTimer = setTimeout(function () { plDelArm = false; renderPlTabs(); }, 4000); renderPlTabs(); }
+        else {
+          clearTimeout(plTimer); plDelArm = false;
+          var nm = (plOf(activePl) || {}).name; plDelete(activePl);
+          toast("Playlist «" + nm + "» eliminata. I brani restano nel database.");
+        }
+      }
+    };
+    $("pltabs").onkeydown = function (e) {
+      var id = e.target.id; if (id !== "pl-name" && id !== "pl-rename") return;
+      if (e.key === "Enter") { e.preventDefault(); e.target.blur(); if (id === "pl-name") createPlaylist(e.target.value, []); else doRename(); }
+      else if (e.key === "Escape") { e.target.blur(); plNaming = false; plRenaming = null; renderPlTabs(); }
+    };
+    $("thead").onchange = function (e) {
+      if (e.target.id !== "chk-all") return;
+      var list = filtered(), allOn = list.length > 0 && visibleChecked(list).length === list.length;
+      list.forEach(function (t) { if (allOn) checked.delete(t.id); else checked.add(t.id); });
+      bulkArm = false; renderTable();
+    };
+    $("bulk").onclick = async function (e) {
+      var b = e.target.closest("[data-bulk]"); if (!b) return;
+      var a = b.dataset.bulk, list = filtered();
+      if (a === "nope") { list.forEach(function (t) { if (interestOf(t) === "no") checked.add(t.id); }); bulkArm = false; renderTable(); }
+      else if (a === "clear") { checked.clear(); bulkArm = false; renderTable(); }
+      else if (a === "pl-add") {
+        var pl = plOf($("bulk-pl") && $("bulk-pl").value), picked = visibleChecked(list).map(function (t) { return t.id; });
+        if (pl && picked.length) {
+          var have = {}; pl.ids.forEach(function (id) { have[id] = 1; });
+          var add = picked.filter(function (id) { return !have[id]; });
+          plSave(Object.assign({}, pl, { ids: pl.ids.concat(add) }));
+          toast(add.length + (add.length === 1 ? " brano aggiunto" : " brani aggiunti") + " a «" + pl.name + "»" + (add.length < picked.length ? " (" + (picked.length - add.length) + (picked.length - add.length === 1 ? " già presente)" : " già presenti)") : ""));
+          checked.clear(); bulkArm = false; renderTable();
+        }
+      }
+      else if (a === "pl-new") { createPlaylist($("bulk-name").value, visibleChecked(list).map(function (t) { return t.id; })); }
+      else if (a === "pl-remove") {
+        var cp = plOf(activePl), gone = {}; visibleChecked(list).forEach(function (t) { gone[t.id] = 1; });
+        if (cp) {
+          var kept = cp.ids.filter(function (id) { return !gone[id]; });
+          plSave(Object.assign({}, cp, { ids: kept }));
+          var nr = cp.ids.length - kept.length; toast(nr + (nr === 1 ? " brano tolto da «" : " brani tolti da «") + cp.name + "»");
+          checked.clear(); bulkArm = false; renderTable();
+        }
+      }
+      else if (a === "del") {
+        var sel = visibleChecked(list);
+        if (!sel.length) return;
+        if (!bulkArm) {
+          bulkArm = true; clearTimeout(bulkTimer);
+          bulkTimer = setTimeout(function () { bulkArm = false; renderTable(); }, 4000);
+          renderTable(); return;
+        }
+        clearTimeout(bulkTimer); bulkArm = false;
+        var ids = sel.map(function (t) { return t.id; });
+        if (ids.indexOf(selectedId) >= 0) selectedId = null;
+        if (mode === "edit" && ids.indexOf(editId) >= 0) { mode = "view"; editId = null; }
+        for (var i = 0; i < ids.length; i++) {
+          await deleteTrack(ids[i]);
+          checked.delete(ids[i]);
+          if (localAudio[ids[i]]) { URL.revokeObjectURL(localAudio[ids[i]].url); delete localAudio[ids[i]]; }
+        }
+        renderAll(); renderDeck(true);
+        toast(ids.length + (ids.length === 1 ? " brano eliminato" : " brani eliminati"));
+      }
+    };
+    $("btn-files").onclick = function () { $("in-audio").click(); };
+    $("in-audio").onchange = function () { if (this.files.length) importAudioFiles(this.files); this.value = ""; };
+    $("btn-import").onclick = function () { $("in-csv").click(); };
+    $("in-csv").onchange = function () {
+      var f = this.files[0]; this.value = ""; if (!f) return;
+      var r = new FileReader();
+      if (/\.xlsx?$/i.test(f.name)) {
+        if (!window.XLSX) { toast("Libreria Excel non caricata: riprova o usa il CSV"); return; }
+        r.onload = function () {
+          try {
+            var wb = XLSX.read(r.result, { type: "array" });
+            var ws = wb.Sheets[wb.SheetNames[0]];
+            var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" });
+            importRows(rows.map(function (row) { return row.map(function (c) { return c == null ? "" : String(c); }); }));
+          } catch (e) { toast("Impossibile leggere il file Excel"); }
+        };
+        r.readAsArrayBuffer(f);
+      } else {
+        r.onload = function () { importCsv(String(r.result)); }; r.readAsText(f);
+      }
+    };
+    $("btn-export").onclick = exportCsv;
+    $("btn-xlsx").onclick = exportXlsx;
+    $("btn-backup").onclick = saveBackup;
+    $("btn-restore").onclick = function () { $("in-backup").click(); };
+    $("btn-covers").onclick = findMissingCovers;
+    $("in-backup").onchange = function () {
+      var f = this.files[0]; this.value = ""; if (!f) return;
+      var r = new FileReader();
+      r.onload = function () { try { restoreBackup(JSON.parse(String(r.result))); } catch (e) { toast("File di backup non leggibile"); } };
+      r.readAsText(f);
+    };
+    renderBackupInfo();
+    renderAll();
+    initStore();
+  }
+  function openNew() { mode = "edit"; editId = null; renderDeck(true); if (window.matchMedia("(max-width: 860px)").matches) $("deck").scrollIntoView({ block: "nearest" }); }
+  function resetFilters() {
+    ["f-q", "f-genre", "f-key", "f-status", "f-interest", "f-y1", "f-y2", "f-b1", "f-b2"].forEach(function (id) { $(id).value = ""; });
+    mixOnly = false; var m = $("f-mix"); m.setAttribute("aria-pressed", "false"); m.classList.remove("primary"); renderTable();
+  }
+  document.addEventListener("error", function (e) {
+    var im = e.target;
+    if (im && im.tagName === "IMG" && im.classList.contains("cov")) {
+      var ph = document.createElement("span"); ph.className = im.className + " ph"; ph.textContent = "\u266a"; im.replaceWith(ph);
+    }
+  }, true);
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+  init();
+})();
+</script>
+</body>
+</html>
