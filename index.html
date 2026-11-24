@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>html{color-scheme:light}body{margin:0}img{max-width:100%}</style>
+<script>try{var __t=localStorage.getItem("crate-dj-theme");if(__t==="light"||__t==="dark")document.documentElement.setAttribute("data-theme",__t);}catch(e){}</script>
 <title>Crate DJ</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
@@ -146,6 +147,7 @@ input[type="checkbox"] { width: auto; padding: 0; accent-color: var(--accent); c
 .embed { display: block; width: 100%; border: 0; border-radius: 6px; background: var(--bg); }
 .embed.yt { aspect-ratio: 16 / 9; }
 .player { display: flex; flex-direction: column; gap: 6px; }
+#btn-theme { width: 38px; padding: 6px 0; font-size: 17px; line-height: 1.2; }
 .ytthumb { display: flex; align-items: center; justify-content: center; background-size: cover; background-position: center; text-decoration: none; color: #fff; }
 .ytthumb span { background: rgba(0, 0, 0, .72); padding: 8px 14px; border-radius: 4px; font-weight: 600; }
 .chip { font: 500 12px var(--f-mono); border: 1px solid var(--line); border-radius: 3px; padding: 3px 7px; }
@@ -193,6 +195,7 @@ form textarea { resize: vertical; min-height: 56px; }
     <input id="in-csv" type="file" accept=".csv,.xlsx,.xls,text/csv,text/plain" hidden>
     <button id="btn-export" type="button">Esporta CSV</button>
     <button id="btn-xlsx" type="button">Esporta Excel</button>
+    <button id="btn-theme" type="button" aria-label="Tema"></button>
     <button id="btn-delmode" type="button">Seleziona…</button>
   </header>
 
@@ -1192,6 +1195,22 @@ window.claude = { use: async function (name) {
     $("btn-backup").onclick = saveBackup;
     $("btn-restore").onclick = function () { $("in-backup").click(); };
     $("btn-covers").onclick = findMissingCovers;
+    var THEME_KEY = "crate-dj-theme", themeMode = "auto";
+    try { var tv = localStorage.getItem(THEME_KEY); if (tv === "light" || tv === "dark") themeMode = tv; } catch (e) {}
+    function applyTheme() {
+      var root = document.documentElement, b = $("btn-theme");
+      if (themeMode === "auto") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", themeMode);
+      b.textContent = themeMode === "light" ? "\u2600" : themeMode === "dark" ? "\u263e" : "\u25d0";
+      b.title = "Tema: " + (themeMode === "light" ? "chiaro" : themeMode === "dark" ? "scuro" : "automatico, segue il dispositivo") + ". Clic per cambiare.";
+      b.setAttribute("aria-label", b.title);
+    }
+    $("btn-theme").onclick = function () {
+      themeMode = themeMode === "auto" ? "light" : themeMode === "light" ? "dark" : "auto";
+      try { if (themeMode === "auto") localStorage.removeItem(THEME_KEY); else localStorage.setItem(THEME_KEY, themeMode); } catch (e) {}
+      applyTheme();
+      toast("Tema: " + (themeMode === "light" ? "chiaro" : themeMode === "dark" ? "scuro" : "automatico"));
+    };
+    applyTheme();
     $("in-backup").onchange = function () {
       var f = this.files[0]; this.value = ""; if (!f) return;
       var r = new FileReader();
